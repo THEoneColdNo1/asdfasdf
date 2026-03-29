@@ -1,0 +1,174 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <title>FishDex</title>
+  <meta name="description" content="AI Fish Identifier and Tracker">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css">
+  <link rel="manifest" href="manifest.json">
+</head>
+<body class="dark-theme">
+  <!-- Main App Viewport -->
+  <main id="app-content">
+    
+    <!-- Home Screen -->
+    <section id="home-screen" class="screen active">
+      <header>
+        <h1>FishDex</h1>
+        <p class="subtitle">AI Powered Fish Encyclopedia</p>
+      </header>
+      
+      <div class="stats-overview glass-panel">
+        <div class="stat-box">
+          <span class="stat-value" id="home-total-caught">0</span>
+          <span class="stat-label">Caught</span>
+        </div>
+        <div class="stat-box">
+          <span class="stat-value" id="home-unique-species">0</span>
+          <span class="stat-label">Species</span>
+        </div>
+      </div>
+      
+      <button class="primary-btn pulse-glow" id="quick-scan-btn">
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.5 4h5v5m-5 11h5v-5M9.5 20h-5v-5m5-11h-5v5"/><circle cx="12" cy="12" r="3"/></svg>
+        Scan a Fish
+      </button>
+
+      <h3 class="section-title" style="margin-top: 30px;">Recent Catches</h3>
+      <div id="recent-catches-list" class="recent-list">
+        <p class="empty-state">No fish caught yet. Go to Camera to start scanning!</p>
+      </div>
+    </section>
+
+    <!-- Camera Screen -->
+    <section id="camera-screen" class="screen">
+      <div class="camera-container">
+        <video id="camera-preview" autoplay playsinline muted></video>
+        <div class="camera-overlay">
+          <div class="scan-frame"></div>
+          <div class="scan-line"></div>
+        </div>
+        <div class="camera-controls">
+          <p id="camera-status" class="status-text">Point at a fish to identify...</p>
+          <button id="capture-btn" class="capture-btn">
+            <div class="inner-circle"></div>
+          </button>
+        </div>
+        <canvas id="snapshot-canvas" style="display: none;"></canvas>
+      </div>
+      
+      <!-- Scan Result Modal Overlay -->
+      <div id="scan-result-modal" class="modal-overlay hidden">
+        <div class="result-card glass-panel">
+          <h2 class="glow-text">New Species Found!</h2>
+          <div class="fish-image-placeholder spinner" id="result-image-area"></div>
+          <h3 id="result-fish-name">Analyzing...</h3>
+          <div class="fish-tags">
+            <span class="rarity-tag" id="result-fish-rarity"></span>
+            <span class="info-tag" id="result-fish-size"></span>
+          </div>
+          <button id="result-close-btn" class="primary-btn" style="margin-top: 20px;">Add to Knowledge</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- Knowledge Base Screen -->
+    <section id="knowledge-screen" class="screen">
+      <header>
+        <h1>Knowledge</h1>
+        <div class="progress-bar-container">
+          <div class="progress-bar-fill" id="knowledge-progress"></div>
+        </div>
+        <p class="progress-text"><span id="knowledge-count">0</span> / <span id="knowledge-total">0</span> Unlocked</p>
+      </header>
+      
+      <div class="filter-bar">
+        <button class="filter-chip active">All</button>
+        <button class="filter-chip">Common</button>
+        <button class="filter-chip">Rare</button>
+        <button class="filter-chip">Legendary</button>
+      </div>
+
+      <div id="pokedex-grid" class="pokedex-grid">
+        <!-- Rendered by JS -->
+      </div>
+
+      <!-- Detail View Modal -->
+      <div id="fish-detail-modal" class="modal-overlay hidden">
+        <div class="detail-card glass-panel">
+          <button id="close-detail-btn" class="icon-btn closedetail">×</button>
+          <div class="detail-hero" id="detail-hero">
+            <!-- image inserted by JS -->
+          </div>
+          <h2 id="detail-name">Fish Name</h2>
+          <span class="rarity-badge" id="detail-rarity">Rarity</span>
+          
+          <div class="detail-stats-grid">
+            <div class="detail-stat">
+              <span class="label">Habitat</span>
+              <span class="value" id="detail-habitat">...</span>
+            </div>
+            <div class="detail-stat">
+              <span class="label">Diet</span>
+              <span class="value" id="detail-diet">...</span>
+            </div>
+            <div class="detail-stat">
+              <span class="label">Avg Size</span>
+              <span class="value" id="detail-size">...</span>
+            </div>
+          </div>
+          
+          <p class="fish-description" id="detail-desc">...</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- Profile & Stats Screen -->
+    <section id="profile-screen" class="screen">
+      <header>
+        <h1>Angler Profile</h1>
+      </header>
+      
+      <div class="profile-card glass-panel">
+        <div class="profile-avatar">
+          <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+        </div>
+        <h2 class="angler-title">Novice Fisher</h2>
+      </div>
+
+      <h3 class="section-title">Achievements</h3>
+      <div class="achievements-list" id="achievements-container">
+        <!-- JS rendered -->
+      </div>
+    </section>
+
+  </main>
+
+  <!-- Bottom Navigation -->
+  <nav id="bottom-nav">
+    <button class="nav-btn active" data-target="home">
+      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
+      <span>Home</span>
+    </button>
+    <button class="nav-btn" data-target="camera">
+      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.5 4h5v5m-5 11h5v-5M9.5 20h-5v-5m5-11h-5v5"/><circle cx="12" cy="12" r="3"/></svg>
+      <span>Scan</span>
+    </button>
+    <button class="nav-btn" data-target="knowledge">
+      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19.5v-15A2.5 2.5 0 0 1 6.5 2H20v20H6.5a2.5 2.5 0 0 1 0-5H20"/></svg>
+      <span>Knowledge</span>
+    </button>
+    <button class="nav-btn" data-target="profile">
+      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+      <span>Profile</span>
+    </button>
+  </nav>
+
+  <script src="fishData.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
