@@ -148,74 +148,100 @@ function achievementCard(title, desc, unlocked) {
   `;
 }
 
-// ---------------- Image Upload & Processing Logic ----------------
+// ---------------- Image Upload & Processing State Machine ----------------
 const uploadInput = document.getElementById('fish-upload-input');
+const triggerBtn = document.getElementById('trigger-upload-btn');
 const previewArea = document.getElementById('upload-preview-area');
 const previewImg = document.getElementById('upload-preview-img');
+const placeholderSvg = document.getElementById('upload-placeholder-svg');
+const placeholderTxt = document.getElementById('upload-placeholder-text');
+
+const actionArea = document.getElementById('analyze-action-area');
 const analyzeBtn = document.getElementById('analyze-btn');
 const uploadStatus = document.getElementById('upload-status');
+const resetBtn = document.getElementById('reset-upload-btn');
 
-if (previewArea) {
-  previewArea.addEventListener('click', () => {
-    uploadInput.click();
-  });
+let currentScannedFish = null;
+
+function resetUploadState() {
+  if(uploadInput) uploadInput.value = "";
+  if(previewImg) { previewImg.src = ""; previewImg.classList.add('state-hidden'); }
+  if(placeholderSvg) placeholderSvg.classList.remove('state-hidden');
+  if(placeholderTxt) placeholderTxt.classList.remove('state-hidden');
+  
+  if(actionArea) {
+    actionArea.classList.add('state-hidden');
+    actionArea.classList.remove('fade-in');
+  }
+  
+  if(analyzeBtn) {
+    analyzeBtn.disabled = false;
+    analyzeBtn.style.opacity = '1';
+    analyzeBtn.innerHTML = `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right:8px;"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg> Analyze Fish`;
+  }
+  currentScannedFish = null;
 }
 
-if (uploadInput) {
+[triggerBtn, previewArea].forEach(el => {
+  if(el) el.addEventListener('click', () => uploadInput.click());
+});
+
+if(resetBtn) resetBtn.addEventListener('click', resetUploadState);
+
+if(uploadInput) {
   uploadInput.addEventListener('change', (e) => {
     const file = e.target.files[0];
-    if (!file) return;
+    if(!file) return;
     
-    // Validation: Reject files > 10MB
-    const maxSize = 10 * 1024 * 1024;
-    if (file.size > maxSize) {
-      alert("File is too large! Please select an image under 10MB.");
-      uploadInput.value = "";
+    // Validation
+    if(file.size > 10 * 1024 * 1024) {
+      alert("Please select an image smaller than 10MB.");
+      resetUploadState();
       return;
     }
     
-    // Show preliminary preview
+    // Transition to Preview
     previewImg.src = URL.createObjectURL(file);
-    previewImg.classList.remove('hidden');
+    previewImg.classList.remove('state-hidden');
+    placeholderSvg.classList.add('state-hidden');
+    placeholderTxt.classList.add('state-hidden');
     
-    analyzeBtn.classList.remove('hidden');
-    uploadStatus.innerText = "Image selected. Ready to process.";
+    // Transition to Actions
+    actionArea.classList.remove('state-hidden');
+    actionArea.classList.add('fade-in');
+    uploadStatus.innerText = "Image loaded. Ready for AI.";
+    
+    // Auto-Scroll to guide UX
+    setTimeout(() => {
+      analyzeBtn.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }, 150);
   });
 }
 
-if (analyzeBtn) {
+if(analyzeBtn) {
   analyzeBtn.addEventListener('click', async () => {
-    if (!uploadInput.files.length) return;
+    if(!uploadInput.files.length) return;
     
     analyzeBtn.disabled = true;
-    analyzeBtn.style.opacity = '0.5';
-    analyzeBtn.innerText = "Processing...";
-    uploadStatus.innerText = "Compressing image...";
+    analyzeBtn.style.opacity = '0.8';
+    analyzeBtn.innerHTML = `<div class="spinner" style="width:20px; height:20px; margin:0 10px 0 0; display:inline-block; border-top-color:#fff; border-width: 2px;"></div> Analyzing...`;
+    uploadStatus.innerText = "Running AI routines...";
     
     try {
       const file = uploadInput.files[0];
-      
-      // Compress image to max 1024px width, JPEG 0.8
       const compressedDataUrl = await compressImage(file, 1024, 0.8);
       
-      uploadStatus.innerText = "AI Analyzing Species...";
-      
-      // Simulate network / AI processing delay
       setTimeout(() => {
-        uploadStatus.innerText = "Analysis complete!";
-        analyzeBtn.disabled = false;
-        analyzeBtn.style.opacity = '1';
-        analyzeBtn.innerText = "Analyze Fish";
-        processMockScan(); // Triggers the existing mock AI flow
-      }, 2000);
+        uploadStatus.innerText = "Identification Complete!";
+        processMockScan(); 
+      }, 1800);
       
-    } catch (err) {
-      console.error("Compression/Analysis error:", err);
-      alert("Failed to process image.");
+    } catch(err) {
+      console.error(err);
+      uploadStatus.innerText = "Could not identify fish. Try another image.";
       analyzeBtn.disabled = false;
       analyzeBtn.style.opacity = '1';
-      analyzeBtn.innerText = "Analyze Fish";
-      uploadStatus.innerText = "Upload failed.";
+      analyzeBtn.innerHTML = `Analyze Fish`;
     }
   });
 }
@@ -232,7 +258,6 @@ function compressImage(file, maxWidth, quality) {
         let width = img.width;
         let height = img.height;
         
-        // Calculate new dimensions maintaining aspect ratio
         if (width > maxWidth) {
           height = Math.round((height * maxWidth) / width);
           width = maxWidth;
@@ -243,8 +268,6 @@ function compressImage(file, maxWidth, quality) {
         canvas.height = height;
         const ctx = canvas.getContext('2d');
         ctx.drawImage(img, 0, 0, width, height);
-        
-        // Export to JPEG
         resolve(canvas.toDataURL('image/jpeg', quality));
       };
       img.onerror = error => reject(error);
@@ -254,40 +277,27 @@ function compressImage(file, maxWidth, quality) {
 }
 
 function processMockScan() {
-  state.totalScans++;
-  let unlockedNew = false;
-  
-  // Try to find a locked fish. Give it a 70% chance to pick a new one, 30% duplicate
-  let pool = [];
+  let pool = fishDatabase; 
   if (Math.random() < 0.7 && state.unlockedFishIds.length < fishDatabase.length) {
     pool = fishDatabase.filter(f => !state.unlockedFishIds.includes(f.id));
-    unlockedNew = true;
-  } else {
-    pool = fishDatabase; // Pick from any
   }
+  currentScannedFish = pool[Math.floor(Math.random() * pool.length)];
   
-  // Pick random from pool
-  const randomFish = pool[Math.floor(Math.random() * pool.length)];
-  
-  if(!state.unlockedFishIds.includes(randomFish.id)) {
-    state.unlockedFishIds.push(randomFish.id);
-  }
-  
-  saveState();
-  showResultModal(randomFish, unlockedNew);
+  // Show modal, but DO NOT save state yet
+  showResultModal(currentScannedFish);
 }
 
-function showResultModal(fish, isNew) {
+function showResultModal(fish) {
   const modal = document.getElementById('scan-result-modal');
   modal.classList.remove('hidden');
   
+  const isNew = !state.unlockedFishIds.includes(fish.id);
   const titleText = isNew ? "New Species Found!" : "Species Identified!";
   document.querySelector('#scan-result-modal h2').innerText = titleText;
   
-  // Swap out spinner for image
   const imgContainer = document.getElementById('result-image-area');
   imgContainer.classList.remove('spinner');
-  imgContainer.innerHTML = `<img src="${fish.image}" style="width: 100px; height: 100px; object-fit: cover; border-radius: 12px;">`;
+  imgContainer.innerHTML = `<img src="${fish.image}" style="width: 100px; height: 100px; object-fit: cover; border-radius: 12px; box-shadow: 0 0 20px rgba(255,255,255,0.1);">`;
   
   document.getElementById('result-fish-name').innerText = fish.name;
   
@@ -298,13 +308,32 @@ function showResultModal(fish, isNew) {
   document.getElementById('result-fish-size').innerText = "Size: " + fish.size;
 }
 
-document.getElementById('result-close-btn').addEventListener('click', () => {
+// Gamification Save 
+document.getElementById('result-save-btn').addEventListener('click', () => {
+  if (currentScannedFish) {
+    state.totalScans++;
+    if(!state.unlockedFishIds.includes(currentScannedFish.id)) {
+      state.unlockedFishIds.push(currentScannedFish.id);
+    }
+    saveState();
+  }
+  closeAndCleanModal();
+});
+
+// Gamification Discard (Scan Another)
+const discardBtn = document.getElementById('result-discard-btn');
+if(discardBtn) {
+  discardBtn.addEventListener('click', closeAndCleanModal);
+}
+
+function closeAndCleanModal() {
   document.getElementById('scan-result-modal').classList.add('hidden');
-  // Reset spinner for next time
   const imgContainer = document.getElementById('result-image-area');
   imgContainer.innerHTML = '';
   imgContainer.classList.add('spinner');
-});
+  
+  resetUploadState();
+}
 
 
 // ---------------- Knowledge Base / Pokedex ----------------

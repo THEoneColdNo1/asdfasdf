@@ -390,3 +390,23 @@ h3.section-title { font-size: 1.2rem; color: var(--text-main); margin-bottom: 12
 }
 @keyframes spin { 100% { transform: rotate(360deg); } }
 .glow-text { color: var(--accent-primary); text-shadow: 0 0 10px var(--accent-glow); margin-bottom: 20px; }
+
+/* UX STATE UTILITIES */
+.state-hidden { display: none !important; }
+.fade-in { animation: subtleFadeIn 0.5s ease forwards; }
+
+@keyframes subtleFadeIn {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.action-area {
+  width: 100%;
+  max-width: 400px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 15px;
+  margin-top: 25px;
+  padding-bottom: 80px; /* Give room above the bottom tab nav */
+}

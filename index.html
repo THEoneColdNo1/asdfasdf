@@ -44,24 +44,43 @@
       </div>
     </section>
 
-    <!-- Upload / Scan Screen -->
-    <section id="camera-screen" class="screen">
-      <div class="upload-container">
+    <!-- Upload Scanner Screen -->
+    <section id="camera-screen" class="screen" style="overflow-y: auto; height: 100%; padding-bottom: 90px; scroll-behavior: smooth;">
+      <h2 style="text-align: center; margin-top: 10px; margin-bottom: 20px;">AI Fish Scanner</h2>
+      
+      <div class="upload-container" style="height: auto; margin-top: 0;">
+        
+        <!-- STEP 1: Upload Dropzone -->
         <div id="upload-preview-area" class="upload-preview-area">
-          <svg class="placeholder-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
-          <p>Tap to select or snap a photo of a fish</p>
-          <img id="upload-preview-img" src="" alt="Fish Preview" class="hidden">
+          <svg id="upload-placeholder-svg" class="placeholder-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
+          <p id="upload-placeholder-text">Tap to select or snap a photo</p>
+          <img id="upload-preview-img" src="" alt="Fish Preview" class="state-hidden">
         </div>
         
-        <!-- Hidden file input triggers native Android/iOS camera wrapper if available -->
+        <!-- Hidden file input -->
         <input type="file" id="fish-upload-input" accept="image/*" capture="environment" style="display: none;">
+        
+        <!-- STEP 1 Helper Button -->
+        <button id="trigger-upload-btn" class="primary-btn" style="margin-top: 25px; width: 80%; max-width: 300px;">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+          Upload or Take Photo
+        </button>
+
+        <!-- STEP 2 & 3: Action Area (Hidden by default) -->
+        <div id="analyze-action-area" class="action-area state-hidden">
+          <p id="upload-status" class="status-text" style="color: var(--text-muted); margin-bottom: 10px;">Image uploaded. Ready for AI.</p>
+          <button id="analyze-btn" class="primary-btn pulse-glow" style="width: 100%;">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+            Analyze Fish
+          </button>
+          
+          <button id="reset-upload-btn" style="background: transparent; border: 1px solid rgba(255,255,255,0.2); color: #fff; padding: 12px; border-radius: 12px; width: 100%; margin-top: 10px; cursor: pointer;">
+            Try Another Photo
+          </button>
+        </div>
+
       </div>
-      
-      <div class="camera-controls">
-        <p id="upload-status" class="status-text">Ready for upload.</p>
-        <button id="analyze-btn" class="primary-btn hidden" style="width: 80%; max-width: 300px; margin: 0 auto;">Analyze Fish</button>
-      </div>
-      
+    </section>  
       <!-- Scan Result Modal Overlay -->
       <div id="scan-result-modal" class="modal-overlay hidden">
         <div class="result-card glass-panel">
@@ -72,10 +91,10 @@
             <span class="rarity-tag" id="result-fish-rarity"></span>
             <span class="info-tag" id="result-fish-size"></span>
           </div>
-          <button id="result-close-btn" class="primary-btn" style="margin-top: 20px;">Add to Knowledge</button>
+          <button id="result-save-btn" class="primary-btn pulse-glow" style="margin-bottom: 10px;">Save to FishDex</button>
+          <button id="result-discard-btn" style="background: transparent; color: var(--text-muted); padding: 12px; border: none; cursor: pointer; width: 100%; font-size: 0.9rem;">Scan Another Fish (Discard)</button>
         </div>
       </div>
-    </section>
 
     <!-- Knowledge Base Screen -->
     <section id="knowledge-screen" class="screen">
