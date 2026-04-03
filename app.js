@@ -40,11 +40,6 @@ navBtns.forEach(btn => {
     document.getElementById(targetId).classList.add('active');
 
     // Screen specific logic
-    if(targetId === 'camera-screen') {
-      startCamera();
-    } else {
-      stopCamera();
-    }
     if(targetId === 'knowledge-screen') {
       renderPokedex();
     }
@@ -153,152 +148,110 @@ function achievementCard(title, desc, unlocked) {
   `;
 }
 
-// ---------------- Camera & Mock AI Logic ----------------
-let videoStream = null;
+// ---------------- Image Upload & Processing Logic ----------------
+const uploadInput = document.getElementById('fish-upload-input');
+const previewArea = document.getElementById('upload-preview-area');
+const previewImg = document.getElementById('upload-preview-img');
+const analyzeBtn = document.getElementById('analyze-btn');
+const uploadStatus = document.getElementById('upload-status');
 
-async function startCamera() {
-  console.log('[Camera] Attempting to start camera...');
-  const video = document.getElementById('camera-preview');
-  const errorContainer = document.getElementById('camera-error-container');
-  const errorMsg = document.getElementById('camera-error-message');
-  const retryBtn = document.getElementById('retry-camera-btn');
-  
-  // Hide error UI
-  if(errorContainer) errorContainer.style.display = 'none';
-  
-  // Reset the video state
-  video.pause();
-  video.srcObject = null;
-  video.muted = true;
-  video.playsInline = true;
-  video.autoplay = true;
-  
-  // 1. Check for Secure Context
-  const isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
-  const isHttps = window.location.protocol === 'https:';
-  const isFile = window.location.protocol === 'file:';
-  
-  if (!isHttps && !isLocalhost && !isFile) {
-    showCameraError("Mobile browsers require HTTPS for camera access. Please use HTTPS.");
-    return;
-  }
-  
-  if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-    showCameraError("Your browser does not support the camera API (getUserMedia).");
-    return;
-  }
+if (previewArea) {
+  previewArea.addEventListener('click', () => {
+    uploadInput.click();
+  });
+}
 
-  try {
-    document.getElementById('camera-status').innerText = "Initializing Hardware...";
+if (uploadInput) {
+  uploadInput.addEventListener('change', (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
     
-    // Keep constraints extremely simple to prevent Overconstrained errors dropping frames
-    const constraints = {
-      video: { facingMode: 'environment' },
-      audio: false
-    };
-    
-    videoStream = await navigator.mediaDevices.getUserMedia(constraints);
-    
-    // Check if the stream actually contains video data
-    if (!videoStream || !videoStream.getVideoTracks().length) {
-       throw new Error("Stream acquired but no video tracks were found. Camera may be broken.");
+    // Validation: Reject files > 10MB
+    const maxSize = 10 * 1024 * 1024;
+    if (file.size > maxSize) {
+      alert("File is too large! Please select an image under 10MB.");
+      uploadInput.value = "";
+      return;
     }
     
-    console.log('[Camera] Stream acquired with tracks:', videoStream.getVideoTracks());
-    video.srcObject = videoStream;
+    // Show preliminary preview
+    previewImg.src = URL.createObjectURL(file);
+    previewImg.classList.remove('hidden');
     
-    // Safari specifically needs a tiny delay to paint the display:block correctly before playing
-    setTimeout(() => {
-      console.log('[Camera] Firing manual play()...');
-      const playPromise = video.play();
+    analyzeBtn.classList.remove('hidden');
+    uploadStatus.innerText = "Image selected. Ready to process.";
+  });
+}
+
+if (analyzeBtn) {
+  analyzeBtn.addEventListener('click', async () => {
+    if (!uploadInput.files.length) return;
+    
+    analyzeBtn.disabled = true;
+    analyzeBtn.style.opacity = '0.5';
+    analyzeBtn.innerText = "Processing...";
+    uploadStatus.innerText = "Compressing image...";
+    
+    try {
+      const file = uploadInput.files[0];
       
-      if (playPromise !== undefined) {
-        playPromise.then(() => {
-          console.log('[Camera] Video playing successfully.');
-          document.getElementById('camera-status').innerText = "Point at a fish to identify...";
-        }).catch(e => {
-          console.error('[Camera] Play promise rejected (Autoplay blocked):', e);
-          showCameraError("Browser blocked automatic playback. Tap the button to start.", "Start Video feed", () => {
-             errorContainer.style.display = 'none';
-             video.play();
-             document.getElementById('camera-status').innerText = "Point at a fish to identify...";
-          });
-        });
-      }
-    }, 250);
-    
-  } catch(err) {
-    console.error("[Camera] Exception during getUserMedia:", err);
-    let userMsg = "Camera access denied, unavailable, or blocked by the device.";
-    
-    if (err.name === 'NotAllowedError') {
-      userMsg = "Permission denied. Please grant camera access in your browser site settings.";
-    } else if (err.name === 'NotFoundError' || err.name === 'DevicesNotFoundError') {
-      userMsg = "No rear camera hardware detected on this device.";
-    } else if (err.name === 'NotReadableError' || err.name === 'TrackStartError') {
-      userMsg = "Camera is already in use by another application or background tab.";
-    } else if (err.name === 'OverconstrainedError') {
-      // Fallback if environment failed
-       tryFallbackCamera();
-       return;
+      // Compress image to max 1024px width, JPEG 0.8
+      const compressedDataUrl = await compressImage(file, 1024, 0.8);
+      
+      uploadStatus.innerText = "AI Analyzing Species...";
+      
+      // Simulate network / AI processing delay
+      setTimeout(() => {
+        uploadStatus.innerText = "Analysis complete!";
+        analyzeBtn.disabled = false;
+        analyzeBtn.style.opacity = '1';
+        analyzeBtn.innerText = "Analyze Fish";
+        processMockScan(); // Triggers the existing mock AI flow
+      }, 2000);
+      
+    } catch (err) {
+      console.error("Compression/Analysis error:", err);
+      alert("Failed to process image.");
+      analyzeBtn.disabled = false;
+      analyzeBtn.style.opacity = '1';
+      analyzeBtn.innerText = "Analyze Fish";
+      uploadStatus.innerText = "Upload failed.";
     }
-
-    showCameraError(userMsg);
-  }
+  });
 }
 
-// Emergency Fallback if the strict 'environment' camera isn't found
-async function tryFallbackCamera() {
-  console.warn("[Camera] Environment constraint failed. Attempting generalized fallback.");
-  try {
-    videoStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
-    const video = document.getElementById('camera-preview');
-    video.srcObject = videoStream;
-    setTimeout(() => { video.play(); }, 200);
-  } catch(e) {
-    showCameraError("Fatal Camera Error: " + e.message);
-  }
+// Image Compressor using HTML5 Canvas
+function compressImage(file, maxWidth, quality) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.readAsDataURL(file);
+    reader.onload = event => {
+      const img = new Image();
+      img.src = event.target.result;
+      img.onload = () => {
+        let width = img.width;
+        let height = img.height;
+        
+        // Calculate new dimensions maintaining aspect ratio
+        if (width > maxWidth) {
+          height = Math.round((height * maxWidth) / width);
+          width = maxWidth;
+        }
+        
+        const canvas = document.createElement('canvas');
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(img, 0, 0, width, height);
+        
+        // Export to JPEG
+        resolve(canvas.toDataURL('image/jpeg', quality));
+      };
+      img.onerror = error => reject(error);
+    };
+    reader.onerror = error => reject(error);
+  });
 }
-
-function showCameraError(message, btnText = "Retry Camera", customAction = null) {
-  const errorContainer = document.getElementById('camera-error-container');
-  const errorMsg = document.getElementById('camera-error-message');
-  const retryBtn = document.getElementById('retry-camera-btn');
-  
-  if(errorContainer) {
-    errorMsg.innerText = message;
-    retryBtn.innerText = btnText;
-    
-    // clear old listeners by cloning
-    const newBtn = retryBtn.cloneNode(true);
-    retryBtn.parentNode.replaceChild(newBtn, retryBtn);
-    
-    newBtn.addEventListener('click', customAction ? customAction : startCamera);
-    errorContainer.style.display = 'flex';
-  }
-  document.getElementById('camera-status').innerText = "Camera Error";
-}
-
-function stopCamera() {
-  if(videoStream) {
-    videoStream.getTracks().forEach(track => track.stop());
-    videoStream = null;
-  }
-}
-
-const captureBtn = document.getElementById('capture-btn');
-captureBtn.addEventListener('click', () => {
-  // Show scanning UI
-  document.querySelector('.camera-overlay').classList.add('scanning');
-  document.getElementById('camera-status').innerText = "AI Analyzing Species...";
-  
-  // Simulate network / AI processing delay (2 seconds)
-  setTimeout(() => {
-    document.querySelector('.camera-overlay').classList.remove('scanning');
-    document.getElementById('camera-status').innerText = "Point at a fish to identify...";
-    processMockScan();
-  }, 2000);
-});
 
 function processMockScan() {
   state.totalScans++;
