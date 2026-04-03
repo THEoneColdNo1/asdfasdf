@@ -161,102 +161,122 @@ async function startCamera() {
   const video = document.getElementById('camera-preview');
   const errorContainer = document.getElementById('camera-error-container');
   const errorMsg = document.getElementById('camera-error-message');
+  const retryBtn = document.getElementById('retry-camera-btn');
   
   // Hide error UI
   if(errorContainer) errorContainer.style.display = 'none';
   
-  // 1. Check for Secure Context (HTTPS or Localhost)
+  // Reset the video state
+  video.pause();
+  video.srcObject = null;
+  video.muted = true;
+  video.playsInline = true;
+  video.autoplay = true;
+  
+  // 1. Check for Secure Context
   const isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
   const isHttps = window.location.protocol === 'https:';
-  // Also check if we are loaded via file:// protocol
   const isFile = window.location.protocol === 'file:';
   
   if (!isHttps && !isLocalhost && !isFile) {
-    const msg = "Mobile browsers require HTTPS for camera access. Please access via HTTPS. Current protocol: " + window.location.protocol;
-    console.error('[Camera]', msg);
-    if(errorContainer) {
-      errorMsg.innerText = msg;
-      errorContainer.style.display = 'flex';
-    }
+    showCameraError("Mobile browsers require HTTPS for camera access. Please use HTTPS.");
     return;
   }
   
-  // 2. Check if APIs are physically supported
   if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-    const msg = "Your browser does not support the camera API (getUserMedia).";
-    console.error('[Camera]', msg);
-    if(errorContainer) {
-      errorMsg.innerText = msg;
-      errorContainer.style.display = 'flex';
-    }
+    showCameraError("Your browser does not support the camera API (getUserMedia).");
     return;
   }
 
   try {
-    console.log('[Camera] Requesting getUserMedia with advanced constraints');
+    document.getElementById('camera-status').innerText = "Initializing Hardware...";
     
-    // Using { ideal: 'environment' } prevents OverconstrainedError on picky devices
+    // Keep constraints extremely simple to prevent Overconstrained errors dropping frames
     const constraints = {
-      video: {
-        facingMode: { ideal: 'environment' }
-      },
+      video: { facingMode: 'environment' },
       audio: false
     };
     
     videoStream = await navigator.mediaDevices.getUserMedia(constraints);
-    console.log('[Camera] Stream acquired');
     
+    // Check if the stream actually contains video data
+    if (!videoStream || !videoStream.getVideoTracks().length) {
+       throw new Error("Stream acquired but no video tracks were found. Camera may be broken.");
+    }
+    
+    console.log('[Camera] Stream acquired with tracks:', videoStream.getVideoTracks());
     video.srcObject = videoStream;
     
-    // Guarantee required inline attributes are present for iOS Safari
-    video.setAttribute('autoplay', '');
-    video.setAttribute('muted', '');
-    video.setAttribute('playsinline', '');
+    // Safari specifically needs a tiny delay to paint the display:block correctly before playing
+    setTimeout(() => {
+      console.log('[Camera] Firing manual play()...');
+      const playPromise = video.play();
+      
+      if (playPromise !== undefined) {
+        playPromise.then(() => {
+          console.log('[Camera] Video playing successfully.');
+          document.getElementById('camera-status').innerText = "Point at a fish to identify...";
+        }).catch(e => {
+          console.error('[Camera] Play promise rejected (Autoplay blocked):', e);
+          showCameraError("Browser blocked automatic playback. Tap the button to start.", "Start Video feed", () => {
+             errorContainer.style.display = 'none';
+             video.play();
+             document.getElementById('camera-status').innerText = "Point at a fish to identify...";
+          });
+        });
+      }
+    }, 250);
     
-    // Explicitly tell mobile browsers to begin playback on metadata load
-    video.onloadedmetadata = () => {
-      console.log('[Camera] Metadata loaded. Playing video...');
-      video.play().then(() => {
-        console.log('[Camera] Video playing successfully.');
-        document.getElementById('camera-status').innerText = "Point at a fish to identify...";
-      }).catch(e => {
-        console.error('[Camera] Play promise rejected:', e);
-        if(errorContainer) {
-          errorMsg.innerText = "Autoplay prevented by browser. " + e.message;
-          errorContainer.style.display = 'flex';
-        }
-      });
-    };
   } catch(err) {
     console.error("[Camera] Exception during getUserMedia:", err);
-    let userMsg = "Camera access denied or unavailable.";
+    let userMsg = "Camera access denied, unavailable, or blocked by the device.";
     
     if (err.name === 'NotAllowedError') {
-      userMsg = "Permission denied. Please grant camera access in your browser settings and reload.";
+      userMsg = "Permission denied. Please grant camera access in your browser site settings.";
     } else if (err.name === 'NotFoundError' || err.name === 'DevicesNotFoundError') {
-      userMsg = "No camera hardware detected on this device.";
+      userMsg = "No rear camera hardware detected on this device.";
     } else if (err.name === 'NotReadableError' || err.name === 'TrackStartError') {
-      userMsg = "Camera is blocked or already in use by another application.";
+      userMsg = "Camera is already in use by another application or background tab.";
     } else if (err.name === 'OverconstrainedError') {
-      userMsg = "The requested camera constraints are not supported by your device.";
-    } else {
-      userMsg = err.message || userMsg;
+      // Fallback if environment failed
+       tryFallbackCamera();
+       return;
     }
 
-    if(errorContainer) {
-      errorMsg.innerText = userMsg;
-      errorContainer.style.display = 'flex';
-    }
-    document.getElementById('camera-status').innerText = "Camera Error";
+    showCameraError(userMsg);
   }
 }
 
-// Attach the retry button
-const retryBtn = document.getElementById('retry-camera-btn');
-if(retryBtn) {
-  retryBtn.addEventListener('click', () => {
-    startCamera();
-  });
+// Emergency Fallback if the strict 'environment' camera isn't found
+async function tryFallbackCamera() {
+  console.warn("[Camera] Environment constraint failed. Attempting generalized fallback.");
+  try {
+    videoStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
+    const video = document.getElementById('camera-preview');
+    video.srcObject = videoStream;
+    setTimeout(() => { video.play(); }, 200);
+  } catch(e) {
+    showCameraError("Fatal Camera Error: " + e.message);
+  }
+}
+
+function showCameraError(message, btnText = "Retry Camera", customAction = null) {
+  const errorContainer = document.getElementById('camera-error-container');
+  const errorMsg = document.getElementById('camera-error-message');
+  const retryBtn = document.getElementById('retry-camera-btn');
+  
+  if(errorContainer) {
+    errorMsg.innerText = message;
+    retryBtn.innerText = btnText;
+    
+    // clear old listeners by cloning
+    const newBtn = retryBtn.cloneNode(true);
+    retryBtn.parentNode.replaceChild(newBtn, retryBtn);
+    
+    newBtn.addEventListener('click', customAction ? customAction : startCamera);
+    errorContainer.style.display = 'flex';
+  }
+  document.getElementById('camera-status').innerText = "Camera Error";
 }
 
 function stopCamera() {
