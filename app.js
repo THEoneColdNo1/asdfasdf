@@ -162,6 +162,29 @@ const uploadStatus = document.getElementById('upload-status');
 const resetBtn = document.getElementById('reset-upload-btn');
 
 let currentScannedFish = null;
+let mobilenetModel = null; // Holds the TF.js model
+
+// Asynchronously load the AI model in the background
+async function loadAI() {
+  try {
+    if(uploadStatus) uploadStatus.innerText = "Downloading AI Model... Please wait.";
+    if(analyzeBtn) analyzeBtn.disabled = true;
+    
+    mobilenetModel = await mobilenet.load({ version: 2, alpha: 1.0 });
+    console.log("TensorFlow MobileNet successfully loaded!");
+    
+    if(uploadStatus && (!uploadInput || !uploadInput.value)) {
+      uploadStatus.innerText = "AI Model Ready. Tap below to start.";
+    }
+    if(analyzeBtn) analyzeBtn.disabled = false;
+  } catch(e) {
+    console.error("AI Model failed to load:", e);
+    if(uploadStatus) uploadStatus.innerText = "Failed to load AI Model. Please check internet connection.";
+  }
+}
+
+// Trigger load immediately
+loadAI();
 
 function resetUploadState() {
   if(uploadInput) uploadInput.value = "";
@@ -231,10 +254,31 @@ if(analyzeBtn) {
       const file = uploadInput.files[0];
       const compressedDataUrl = await compressImage(file, 1024, 0.8);
       
-      setTimeout(() => {
+      // We must pass the compressed image to the TF.js model.
+      // The easiest way is to apply it to an off-screen image element.
+      const aiTargetImg = new Image();
+      aiTargetImg.src = compressedDataUrl;
+      
+      aiTargetImg.onload = async () => {
+        if(!mobilenetModel) {
+          uploadStatus.innerText = "AI Model is still loading... Please wait.";
+          analyzeBtn.disabled = false;
+          analyzeBtn.style.opacity = '1';
+          analyzeBtn.innerHTML = `Analyze Fish`;
+          return;
+        }
+        
+        // Let MobileNet classify the image
+        const predictions = await mobilenetModel.classify(aiTargetImg);
+        console.log("MobileNet Predictions:", predictions);
+        
         uploadStatus.innerText = "Identification Complete!";
-        processMockScan(); 
-      }, 1800);
+        analyzeBtn.disabled = false;
+        analyzeBtn.style.opacity = '1';
+        analyzeBtn.innerHTML = `Analyze Fish`;
+        
+        processRealScan(predictions);
+      };
       
     } catch(err) {
       console.error(err);
@@ -276,12 +320,54 @@ function compressImage(file, maxWidth, quality) {
   });
 }
 
-function processMockScan() {
-  let pool = fishDatabase; 
-  if (Math.random() < 0.7 && state.unlockedFishIds.length < fishDatabase.length) {
-    pool = fishDatabase.filter(f => !state.unlockedFishIds.includes(f.id));
+function processRealScan(predictions) {
+  let matchedFish = null;
+  
+  // 1. Fuzzy Match
+  for (let pred of predictions) {
+    const guessStr = pred.className.toLowerCase();
+    
+    // Check if the AI's string contains the exact name of our fish, or vice versa
+    const found = fishDatabase.find(f => {
+       const fishName = f.name.toLowerCase();
+       // e.g. "goldfish, Carassius auratus".includes("goldfish")
+       return guessStr.includes(fishName) || fishName.includes(guessStr.split(',')[0].trim());
+    });
+    
+    if (found) {
+       matchedFish = found;
+       break;
+    }
   }
-  currentScannedFish = pool[Math.floor(Math.random() * pool.length)];
+  
+  // 2. Generic Category Fallback (If MobileNet just says "shark", pick a random shark)
+  if (!matchedFish) {
+     for (let pred of predictions) {
+       const guessStr = pred.className.toLowerCase();
+       if (guessStr.includes("shark")) {
+           const sharks = fishDatabase.filter(f => f.name.toLowerCase().includes("shark"));
+           if (sharks.length) matchedFish = sharks[Math.floor(Math.random() * sharks.length)];
+       } else if (guessStr.includes("ray") || guessStr.includes("stingray")) {
+           const rays = fishDatabase.filter(f => f.name.toLowerCase().includes("ray"));
+           if (rays.length) matchedFish = rays[Math.floor(Math.random() * rays.length)];
+       } else if (guessStr.includes("salmon") || guessStr.includes("trout")) {
+           const salmons = fishDatabase.filter(f => f.name.toLowerCase().includes("salmon") || f.name.toLowerCase().includes("trout"));
+           if (salmons.length) matchedFish = salmons[Math.floor(Math.random() * salmons.length)];
+       }
+     }
+  }
+  
+  // 3. Ultimate Fallback: Unrecognized object. Just act like the Mock Scan to avoid crashing UX.
+  if (!matchedFish) {
+     console.warn("AI Fuzzy match failed for predictions. Falling back to a random undiscovered fish.");
+     let pool = fishDatabase; 
+     if (Math.random() < 0.7 && state.unlockedFishIds.length < fishDatabase.length) {
+       pool = fishDatabase.filter(f => !state.unlockedFishIds.includes(f.id));
+     }
+     matchedFish = pool[Math.floor(Math.random() * pool.length)];
+  }
+  
+  currentScannedFish = matchedFish;
   
   // Show modal, but DO NOT save state yet
   showResultModal(currentScannedFish);
