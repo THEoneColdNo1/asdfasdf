@@ -336,9 +336,9 @@ function processRealScan(predictions) {
   let topPrediction = predictions.reduce((prev, current) => (prev.probability > current.probability) ? prev : current);
   console.log(`AI is ${(topPrediction.probability * 100).toFixed(1)}% confident it is a: ${topPrediction.className}`);
   
-  // Only accept the guess if the AI is fairly confident (> 40%)
-  if (topPrediction.probability > 0.40) {
-      const guessStr = topPrediction.className.toLowerCase();
+  // Only accept the guess if the AI is fairly confident (> 10%)
+  if (topPrediction.probability > 0.10) {
+      const guessStr = topPrediction.className.toLowerCase().trim();
       
       // Attempt 1: Exact Name Match
       matchedFish = fishDatabase.find(f => f.name.toLowerCase() === guessStr);
@@ -353,6 +353,7 @@ function processRealScan(predictions) {
   // or the AI was completely unsure. Pick a random undiscovered fish.
   if (!matchedFish) {
      console.warn("AI didn't confidently match a fish. Falling back to a random undiscovered fish.");
+     alert(`DEBUG: The AI guessed "${topPrediction.className}" with ${(topPrediction.probability * 100).toFixed(1)}% confidence, but couldn't find a match in the database. A random fish was selected instead.`);
      let pool = fishDatabase; 
      if (Math.random() < 0.7 && state.unlockedFishIds.length < fishDatabase.length) {
        pool = fishDatabase.filter(f => !state.unlockedFishIds.includes(f.id));
