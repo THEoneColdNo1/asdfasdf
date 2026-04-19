@@ -162,24 +162,32 @@ const uploadStatus = document.getElementById('upload-status');
 const resetBtn = document.getElementById('reset-upload-btn');
 
 let currentScannedFish = null;
-let mobilenetModel = null; // Holds the TF.js model
+let customModel = null; // Holds the Teachable Machine model
 
-// Asynchronously load the AI model in the background
+// The URL you got from Teachable Machine
+const TM_URL = "https://teachablemachine.withgoogle.com/models/nOnGKX77f/";
+
+// Asynchronously load the custom AI model
 async function loadAI() {
   try {
-    if(uploadStatus) uploadStatus.innerText = "Downloading AI Model... Please wait.";
+    if(uploadStatus) uploadStatus.innerText = "Downloading Custom AI Model... Please wait.";
     if(analyzeBtn) analyzeBtn.disabled = true;
     
-    mobilenetModel = await mobilenet.load({ version: 2, alpha: 1.0 });
-    console.log("TensorFlow MobileNet successfully loaded!");
+    // Make sure TM_URL ends with a slash before concatenating
+    const baseURL = TM_URL.endsWith('/') ? TM_URL : TM_URL + '/';
+    const modelURL = baseURL + "model.json";
+    const metadataURL = baseURL + "metadata.json";
+    
+    customModel = await tmImage.load(modelURL, metadataURL);
+    console.log("Teachable Machine Custom Model successfully loaded!");
     
     if(uploadStatus && (!uploadInput || !uploadInput.value)) {
-      uploadStatus.innerText = "AI Model Ready. Tap below to start.";
+      uploadStatus.innerText = "Custom AI Ready. Tap below to start.";
     }
     if(analyzeBtn) analyzeBtn.disabled = false;
   } catch(e) {
-    console.error("AI Model failed to load:", e);
-    if(uploadStatus) uploadStatus.innerText = "Failed to load AI Model. Please check internet connection.";
+    console.error("Custom AI Model failed to load:", e);
+    if(uploadStatus) uploadStatus.innerText = "Failed to load Custom AI. Check your URL.";
   }
 }
 
@@ -260,17 +268,17 @@ if(analyzeBtn) {
       aiTargetImg.src = compressedDataUrl;
       
       aiTargetImg.onload = async () => {
-        if(!mobilenetModel) {
-          uploadStatus.innerText = "AI Model is still loading... Please wait.";
+        if(!customModel) {
+          uploadStatus.innerText = "Custom AI is still loading... Please wait.";
           analyzeBtn.disabled = false;
           analyzeBtn.style.opacity = '1';
           analyzeBtn.innerHTML = `Analyze Fish`;
           return;
         }
         
-        // Let MobileNet classify the image
-        const predictions = await mobilenetModel.classify(aiTargetImg);
-        console.log("MobileNet Predictions:", predictions);
+        // Let Teachable Machine classify the image
+        const predictions = await customModel.predict(aiTargetImg);
+        console.log("Teachable Machine Predictions:", predictions);
         
         uploadStatus.innerText = "Identification Complete!";
         analyzeBtn.disabled = false;
@@ -323,43 +331,28 @@ function compressImage(file, maxWidth, quality) {
 function processRealScan(predictions) {
   let matchedFish = null;
   
-  // 1. Fuzzy Match
-  for (let pred of predictions) {
-    const guessStr = pred.className.toLowerCase();
-    
-    // Check if the AI's string contains the exact name of our fish, or vice versa
-    const found = fishDatabase.find(f => {
-       const fishName = f.name.toLowerCase();
-       // e.g. "goldfish, Carassius auratus".includes("goldfish")
-       return guessStr.includes(fishName) || fishName.includes(guessStr.split(',')[0].trim());
-    });
-    
-    if (found) {
-       matchedFish = found;
-       break;
-    }
+  // Teachable Machine returns an array of classes with probabilities
+  // Let's find the one it is most confident about
+  let topPrediction = predictions.reduce((prev, current) => (prev.probability > current.probability) ? prev : current);
+  console.log(`AI is ${(topPrediction.probability * 100).toFixed(1)}% confident it is a: ${topPrediction.className}`);
+  
+  // Only accept the guess if the AI is fairly confident (> 40%)
+  if (topPrediction.probability > 0.40) {
+      const guessStr = topPrediction.className.toLowerCase();
+      
+      // Attempt 1: Exact Name Match
+      matchedFish = fishDatabase.find(f => f.name.toLowerCase() === guessStr);
+      
+      // Attempt 2: Fuzzy Name Match (in case you named your TM class slightly off)
+      if (!matchedFish) {
+         matchedFish = fishDatabase.find(f => f.name.toLowerCase().includes(guessStr) || guessStr.includes(f.name.toLowerCase()));
+      }
   }
   
-  // 2. Generic Category Fallback (If MobileNet just says "shark", pick a random shark)
+  // Ultimate Fallback: Unrecognized object (e.g. they snapped a picture of a keyboard)
+  // or the AI was completely unsure. Pick a random undiscovered fish.
   if (!matchedFish) {
-     for (let pred of predictions) {
-       const guessStr = pred.className.toLowerCase();
-       if (guessStr.includes("shark")) {
-           const sharks = fishDatabase.filter(f => f.name.toLowerCase().includes("shark"));
-           if (sharks.length) matchedFish = sharks[Math.floor(Math.random() * sharks.length)];
-       } else if (guessStr.includes("ray") || guessStr.includes("stingray")) {
-           const rays = fishDatabase.filter(f => f.name.toLowerCase().includes("ray"));
-           if (rays.length) matchedFish = rays[Math.floor(Math.random() * rays.length)];
-       } else if (guessStr.includes("salmon") || guessStr.includes("trout")) {
-           const salmons = fishDatabase.filter(f => f.name.toLowerCase().includes("salmon") || f.name.toLowerCase().includes("trout"));
-           if (salmons.length) matchedFish = salmons[Math.floor(Math.random() * salmons.length)];
-       }
-     }
-  }
-  
-  // 3. Ultimate Fallback: Unrecognized object. Just act like the Mock Scan to avoid crashing UX.
-  if (!matchedFish) {
-     console.warn("AI Fuzzy match failed for predictions. Falling back to a random undiscovered fish.");
+     console.warn("AI didn't confidently match a fish. Falling back to a random undiscovered fish.");
      let pool = fishDatabase; 
      if (Math.random() < 0.7 && state.unlockedFishIds.length < fishDatabase.length) {
        pool = fishDatabase.filter(f => !state.unlockedFishIds.includes(f.id));
@@ -368,8 +361,6 @@ function processRealScan(predictions) {
   }
   
   currentScannedFish = matchedFish;
-  
-  // Show modal, but DO NOT save state yet
   showResultModal(currentScannedFish);
 }
 
